@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIお弁当カレンダー＆使い切り買い物リスト (React Pro Max V3)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .scrollbar-none::-webkit-scrollbar { display: none; }
+        .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body className="bg-amber-50 text-gray-800 font-sans min-h-screen pb-40">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const CATEGORIES = {
+            vegetable: { label: "🥦 野菜・果物", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+            meat: { label: "🥩 精肉・お魚・加工肉", color: "bg-rose-50 text-rose-700 border-rose-200" },
+            frozen: { label: "❄️ 冷凍食品", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+            other: { label: "📦 その他・調味料", color: "bg-amber-50 text-amber-700 border-amber-200" }
+        };
+
+        const UNITS = ["g", "個", "本", "枚", "パック", "切れ", "袋", "cc", "ml", "大さじ", "小さじ", "適量", "つまみ", "株", "房"];
+
+        // ==========================================
+        // 主菜 (Main) プール
+        // ==========================================
+        const MAIN_POOL = [
+            { id: "m_karaage", name: "ジューシー鶏唐揚げ", season: "all", ingredients: [{name: "鶏もも肉", qty: 100, unit: "g", category: "meat"}, {name: "片栗粉", qty: 1, unit: "大さじ", category: "other"}] },
+            { id: "m_curry", name: "具だくさんチキンカレー", season: "all", ingredients: [{name: "鶏むね肉", qty: 80, unit: "g", category: "meat"}, {name: "じゃがいも", qty: 40, unit: "g", category: "vegetable"}, {name: "カレールー", qty: 1, unit: "個", category: "other"}] },
+            { id: "ms_1", name: "さわらの西京焼き", season: "spring", ingredients: [{name: "さわら", qty: 1, unit: "切れ", category: "meat"}] },
+            { id: "ms_2", name: "豚肉とアスパラ炒め", season: "spring", ingredients: [{name: "豚小間切れ", qty: 80, unit: "g", category: "meat"}, {name: "アスパラガス", qty: 2, unit: "本", category: "vegetable"}] },
+            { id: "ms_3", name: "春キャベツの回鍋肉", season: "spring", ingredients: [{name: "豚バラ肉", qty: 80, unit: "g", category: "meat"}, {name: "キャベツ", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "ms_4", name: "新ごぼうの肉巻き", season: "spring", ingredients: [{name: "豚薄切り肉", qty: 60, unit: "g", category: "meat"}, {name: "新ごぼう", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "ms_5", name: "白身魚の天ぷら", season: "spring", ingredients: [{name: "白身魚", qty: 1, unit: "切れ", category: "meat"}, {name: "天ぷら粉", qty: 1, unit: "大さじ", category: "other"}] },
+            { id: "msm_1", name: "豚肉とナスの味噌炒め", season: "summer", ingredients: [{name: "豚小間切れ", qty: 80, unit: "g", category: "meat"}, {name: "なす", qty: 50, unit: "g", category: "vegetable"}] },
+            { id: "msm_2", name: "タンドリーチキン", season: "summer", ingredients: [{name: "鶏もも肉", qty: 100, unit: "g", category: "meat"}, {name: "カレー粉", qty: 1, unit: "小さじ", category: "other"}] },
+            { id: "msm_3", name: "ピーマンの肉詰め焼き", season: "summer", ingredients: [{name: "合挽き肉", qty: 70, unit: "g", category: "meat"}, {name: "ピーマン", qty: 2, unit: "本", category: "vegetable"}] },
+            { id: "msm_4", name: "アジのさっぱり南蛮漬け", season: "summer", ingredients: [{name: "あじ", qty: 1, unit: "切れ", category: "meat"}, {name: "玉ねぎ", qty: 20, unit: "g", category: "vegetable"}] },
+            { id: "msm_5", name: "豚肉とゴーヤスタミナ炒め", season: "summer", ingredients: [{name: "豚バラ肉", qty: 80, unit: "g", category: "meat"}, {name: "ゴーヤ", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "ma_1", name: "秋鮭の香ばし塩焼き", season: "autumn", ingredients: [{name: "秋鮭", qty: 1, unit: "切れ", category: "meat"}] },
+            { id: "ma_2", name: "豚肉キノコポン酢炒め", season: "autumn", ingredients: [{name: "豚小間切れ", qty: 80, unit: "g", category: "meat"}, {name: "しめじ", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "ma_3", name: "秋ナスの肉挟み焼き", season: "autumn", ingredients: [{name: "合挽き肉", qty: 60, unit: "g", category: "meat"}, {name: "なす", qty: 50, unit: "g", category: "vegetable"}] },
+            { id: "ma_4", name: "サバのザクザク竜田揚げ", season: "autumn", ingredients: [{name: "さば", qty: 1, unit: "切れ", category: "meat"}, {name: "片栗粉", qty: 1, unit: "大さじ", category: "other"}] },
+            { id: "ma_5", name: "旨味カキフライ", season: "autumn", ingredients: [{name: "冷凍カキフライ", qty: 2, unit: "個", category: "frozen"}] },
+            { id: "mw_1", name: "寒ブリの照り焼き", season: "winter", ingredients: [{name: "ブリ", qty: 1, unit: "切れ", category: "meat"}] },
+            { id: "mw_2", name: "豚肉レンコンの甘辛炒め", season: "winter", ingredients: [{name: "豚小間切れ", qty: 80, unit: "g", category: "meat"}, {name: "レンコン", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "mw_3", name: "鶏大根のほっこり煮", season: "winter", ingredients: [{name: "鶏もも肉", qty: 90, unit: "g", category: "meat"}, {name: "大根", qty: 60, unit: "g", category: "vegetable"}] },
+            { id: "mw_4", name: "冬の贅沢ロールキャベツ", season: "winter", ingredients: [{name: "ロールキャベツ", qty: 1, unit: "個", category: "frozen"}] },
+            { id: "mw_5", name: "タラと白菜のバター蒸し", season: "winter", ingredients: [{name: "タラ", qty: 1, unit: "切れ", category: "meat"}, {name: "白菜", qty: 50, unit: "g", category: "vegetable"}] },
+            { id: "mall_1", name: "デミグラスハンバーグ", season: "all", ingredients: [{name: "冷凍ハンバーグ", qty: 1, unit: "個", category: "frozen"}] },
+            { id: "mall_2", name: "サクサクエビフライ", season: "all", ingredients: [{name: "冷凍エビフライ", qty: 2, unit: "本", category: "frozen"}] },
+            { id: "mall_3", name: "スタミナ豚キムチ", season: "all", ingredients: [{name: "豚小間切れ", qty: 80, unit: "g", category: "meat"}, {name: "キムチ", qty: 40, unit: "g", category: "other"}] },
+            { id: "mall_4", name: "甘酢ミートボール", season: "all", ingredients: [{name: "ミートボール", qty: 4, unit: "個", category: "frozen"}] },
+            { id: "mall_5", name: "本格麻婆茄子", season: "all", ingredients: [{name: "豚ひき肉", qty: 50, unit: "g", category: "meat"}, {name: "なす", qty: 50, unit: "g", category: "vegetable"}] }
+        ];
+
+        // ==========================================
+        // 副菜 (Sub) プール
+        // ==========================================
+        const SUB_POOL = [
+            { id: "s_tamago", name: "だし巻き卵", season: "all", ingredients: [{name: "卵", qty: 0.5, unit: "個", category: "other"}] },
+            { id: "s_broccoli", name: "ブロッコリー胡麻和え", season: "all", ingredients: [{name: "ブロッコリー", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "s_slaw", name: "キャベツコールスロー", season: "all", ingredients: [{name: "キャベツ", qty: 30, unit: "g", category: "vegetable"}, {name: "マヨネーズ", qty: 1, unit: "大さじ", category: "other"}] },
+            { id: "s_fukujin", name: "福神漬け", season: "all", ingredients: [{name: "福神漬け", qty: 15, unit: "g", category: "other"}] },
+            { id: "ss_1", name: "たけのこの土佐煮", season: "spring", ingredients: [{name: "たけのこ水煮", qty: 30, unit: "g", category: "vegetable"}, {name: "かつお節", qty: 1, unit: "つまみ", category: "other"}] },
+            { id: "ss_2", name: "菜の花のからし和え", season: "spring", ingredients: [{name: "菜の花", qty: 25, unit: "g", category: "vegetable"}] },
+            { id: "ss_3", name: "スナップエンドウ茹で", season: "spring", ingredients: [{name: "スナップエンドウ", qty: 3, unit: "本", category: "vegetable"}] },
+            { id: "ss_4", name: "新じゃが甘辛煮", season: "spring", ingredients: [{name: "新じゃがいも", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "ss_5", name: "新玉ねぎポン酢", season: "spring", ingredients: [{name: "新玉ねぎ", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "ssm_1", name: "ピーマン塩昆布", season: "summer", ingredients: [{name: "ピーマン", qty: 1, unit: "本", category: "vegetable"}, {name: "塩昆布", qty: 1, unit: "つまみ", category: "other"}] },
+            { id: "ssm_2", name: "ズッキーニソテー", season: "summer", ingredients: [{name: "ズッキーニ", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "ssm_3", name: "ナスのお浸し", season: "summer", ingredients: [{name: "なす", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "ssm_4", name: "ゴーヤおかか和え", season: "summer", ingredients: [{name: "ゴーヤ", qty: 25, unit: "g", category: "vegetable"}] },
+            { id: "ssm_5", name: "トマトマリネ", season: "summer", ingredients: [{name: "ミニトマト", qty: 3, unit: "個", category: "vegetable"}] },
+            { id: "sa_1", name: "さつまいも甘露煮", season: "autumn", ingredients: [{name: "さつまいも", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "sa_2", name: "キノコバターソテー", season: "autumn", ingredients: [{name: "しめじ", qty: 30, unit: "g", category: "vegetable"}, {name: "バター", qty: 5, unit: "g", category: "other"}] },
+            { id: "sa_3", name: "かぼちゃ煮物", season: "autumn", ingredients: [{name: "かぼちゃ", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "sa_4", name: "ほうれん草お浸し", season: "autumn", ingredients: [{name: "ほうれん草", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "sa_5", name: "エリンギポン酢", season: "autumn", ingredients: [{name: "エリンギ", qty: 25, unit: "g", category: "vegetable"}] },
+            { id: "sw_1", name: "大根のそぼろ煮", season: "winter", ingredients: [{name: "大根", qty: 50, unit: "g", category: "vegetable"}, {name: "鶏ひき肉", qty: 15, unit: "g", category: "meat"}] },
+            { id: "sw_2", name: "白菜の柚子漬け", season: "winter", ingredients: [{name: "白菜", qty: 35, unit: "g", category: "vegetable"}] },
+            { id: "sw_3", name: "れんこんきんぴら", season: "winter", ingredients: [{name: "レンコン", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "sw_4", name: "白菜とツナの和え物", season: "winter", ingredients: [{name: "白菜", qty: 30, unit: "g", category: "vegetable"}, {name: "ツナ缶", qty: 10, unit: "g", category: "other"}] },
+            { id: "sw_5", name: "マッシュポテト", season: "winter", ingredients: [{name: "じゃがいも", qty: 40, unit: "g", category: "vegetable"}] },
+            { id: "sall_1", name: "ゆで卵", season: "all", ingredients: [{name: "卵", qty: 0.5, unit: "個", category: "other"}] },
+            { id: "sall_2", name: "ミニトマト", season: "all", ingredients: [{name: "ミニトマト", qty: 2, unit: "個", category: "vegetable"}] },
+            { id: "sall_3", name: "ポテトサラダ", season: "all", ingredients: [{name: "じゃがいも", qty: 30, unit: "g", category: "vegetable"}] },
+            { id: "sall_4", name: "ちくわ磯辺揚げ", season: "all", ingredients: [{name: "ちくわ", qty: 0.5, unit: "本", category: "other"}] },
+            { id: "sall_5", name: "スイートコーン", season: "all", ingredients: [{name: "冷凍コーン", qty: 20, unit: "g", category: "frozen"}] }
+        ];
+
+        const getSeason = (month) => {
+            if (month >= 2 && month <= 4) return "spring";
+            if (month >= 5 && month <= 7) return "summer";
+            if (month >= 8 && month <= 10) return "autumn";
+            return "winter";
+        };
+
+        // マイレシピを専用枠に分けるためにグループ化処理をアップデート！
+        const getGroupedPool = (pool) => {
+            const groups = {
+                mine: { label: "📝 自分で登録したマイレシピ", items: [] }, // 一番上に出るように最初に定義！
+                spring: { label: "🌸 春の旬", items: [] },
+                summer: { label: "☀️ 夏の旬", items: [] },
+                autumn: { label: "🍁 秋の味覚", items: [] },
+                winter: { label: "❄️ 冬の味覚", items: [] },
+                all: { label: "✨ 定番メニュー", items: [] } // マイグループと分離して「定番メニュー」に変更
+            };
+            pool.forEach(item => {
+                if (item.id && item.id.startsWith('my_')) {
+                    groups.mine.items.push(item);
+                } else if (groups[item.season]) {
+                    groups[item.season].items.push(item);
+                }
+            });
+            return groups;
+        };
+
+        const formatDate = (date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
+        const getWeeksOfMonth = (year, month) => {
+            const weeks = [];
+            let firstDay = new Date(year, month, 1);
+            let currentDay = new Date(firstDay);
+            let dayOfWeek = currentDay.getDay();
+            let diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            currentDay.setDate(currentDay.getDate() + diffToMonday);
+            let lastDay = new Date(year, month + 1, 0);
+
+            while (currentDay <= lastDay) {
+                if (currentDay.getDay() === 1) {
+                    const week = [];
+                    for (let i = 0; i < 5; i++) {
+                        let d = new Date(currentDay);
+                        d.setDate(d.getDate() + i);
+                        week.push(d);
+                    }
+                    weeks.push(week);
+                }
+                currentDay.setDate(currentDay.getDate() + 7);
+            }
+            return weeks;
+        };
+
+        function App() {
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            
+            const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+            const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
+            const [servings, setServings] = useState(2);
+            const [isShoppingListOpen, setIsShoppingListOpen] = useState(false);
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [checkedItems, setCheckedItems] = useState({});
+            
+            const [appData, setAppData] = useState({});
+            const [stockItems, setStockItems] = useState({}); // 在庫データ { itemKey: qty }
+            const [myRecipes, setMyRecipes] = useState({ mains: [], subs: [] }); // マイレシピ
+            const [newRecipe, setNewRecipe] = useState({ type: 'main', name: '', ingredients: [] }); // 新規作成用
+
+            // 安全に結合するための対策を適用！
+            const combinedMains = useMemo(() => {
+                const mains = (myRecipes && Array.isArray(myRecipes.mains)) ? myRecipes.mains : [];
+                return [...MAIN_POOL, ...mains];
+            }, [myRecipes]);
+
+            const combinedSubs = useMemo(() => {
+                const subs = (myRecipes && Array.isArray(myRecipes.subs)) ? myRecipes.subs : [];
+                return [...SUB_POOL, ...subs];
+            }, [myRecipes]);
+
+            useEffect(() => {
+                const ls = (key, setter, parser = JSON.parse) => {
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        try {
+                            const parsed = parser(data);
+                            // データの破損や型違いを防ぐ安全ロジック
+                            if (key === 'obento_my_recipes') {
+                                if (!parsed || typeof parsed !== 'object') {
+                                    setter({ mains: [], subs: [] });
+                                } else {
+                                    setter({
+                                        mains: Array.isArray(parsed.mains) ? parsed.mains : [],
+                                        subs: Array.isArray(parsed.subs) ? parsed.subs : []
+                                    });
+                                }
+                            } else {
+                                setter(parsed);
+                            }
+                        } catch(e) {
+                            console.error("データのパースに失敗しました:", e);
+                        }
+                    }
+                };
+    
+                ls('obento_calendar_data', setAppData);
+                ls('obento_servings', (v) => setServings(parseInt(v)));
+                ls('obento_stock_items', setStockItems);
+                ls('obento_my_recipes', setMyRecipes);
+
+                const weeks = getWeeksOfMonth(currentYear, today.getMonth());
+                const todayStr = formatDate(today);
+                weeks.forEach((week, idx) => {
+                    week.forEach(date => {
+                        if (formatDate(date) === todayStr) setCurrentWeekIndex(idx);
+                    });
+                });
+            }, []);
+
+            const saveState = (key, value, setter) => {
+                setter(value);
+                localStorage.setItem(key, JSON.stringify(value));
+            };
+
+            const handleServingsChange = (e) => {
+                const val = parseInt(e.target.value);
+                setServings(val);
+                localStorage.setItem('obento_servings', val.toString());
+            };
+
+            const updateIngredient = (dateStr, ingIdx, field, value) => {
+                const updated = { ...appData };
+                if (updated[dateStr] && updated[dateStr].ingredients[ingIdx]) {
+                    updated[dateStr].ingredients[ingIdx][field] = value;
+                    saveState('obento_calendar_data', updated, setAppData);
+                }
+            };
+
+            const addIngredient = (dateStr) => {
+                const updated = { ...appData };
+                if (!updated[dateStr]) updated[dateStr] = { main: "", sub1: "", sub2: "", ingredients: [] };
+                updated[dateStr].ingredients.push({ name: "", qty: 0, unit: "g", category: "other", _source: "manual" });
+                saveState('obento_calendar_data', updated, setAppData);
+            };
+
+            const deleteIngredient = (dateStr, ingIdx) => {
+                const updated = { ...appData };
+                if (updated[dateStr]) {
+                    updated[dateStr].ingredients.splice(ingIdx, 1);
+                    saveState('obento_calendar_data', updated, setAppData);
+                }
+            };
+
+            // プルダウンから選んだ時の処理（マイレシピも含めて完全に連動するよ！）
+            const applyDishToField = (dateStr, field, dishId) => {
+                const updated = { ...appData };
+                if (!updated[dateStr]) updated[dateStr] = { main: "", sub1: "", sub2: "", ingredients: [] };
+                
+                // 未選択（クリア）にした場合
+                if (!dishId) {
+                    updated[dateStr][field] = "";
+                    updated[dateStr][field + 'Id'] = "";
+                    updated[dateStr].ingredients = (updated[dateStr].ingredients || []).filter(ing => ing._source !== field);
+                    saveState('obento_calendar_data', updated, setAppData);
+                    return;
+                }
+
+                const pool = field === 'main' ? combinedMains : combinedSubs;
+                const dish = pool.find(d => d.id === dishId);
+                if (!dish) return;
+
+                // 選んだレシピの名前とIDを保存する
+                updated[dateStr][field] = dish.name;
+                updated[dateStr][field + 'Id'] = dish.id;
+                
+                const filteredIngredients = (updated[dateStr].ingredients || []).filter(ing => ing._source !== field);
+                const newIngredients = dish.ingredients.map(ing => ({ ...ing, _source: field }));
+
+                updated[dateStr].ingredients = [...filteredIngredients, ...newIngredients];
+                saveState('obento_calendar_data', updated, setAppData);
+            };
+
+            // 自動提案
+            const suggestWeeklyBalance = () => {
+                const weeks = getWeeksOfMonth(currentYear, currentMonth);
+                const activeWeek = weeks[currentWeekIndex];
+                if (!activeWeek) return;
+
+                const updated = { ...appData };
+                const season = getSeason(currentMonth);
+                const validMains = combinedMains.filter(m => (m.season === season || m.season === "all") && !["m_karaage", "m_curry"].includes(m.id));
+                const validSubs = combinedSubs.filter(s => (s.season === season || s.season === "all") && !["s_tamago", "s_broccoli", "s_slaw", "s_fukujin"].includes(s.id));
+                const shuffledMains = [...validMains].sort(() => 0.5 - Math.random());
+                const shuffledSubs1 = [...validSubs].sort(() => 0.5 - Math.random());
+                const shuffledSubs2 = [...validSubs].sort(() => 0.5 - Math.random());
+
+                const karaageRecipe = combinedMains.find(r => r.id === "m_karaage");
+                const curryRecipe = combinedMains.find(r => r.id === "m_curry");
+                const broccoliSub = combinedSubs.find(r => r.id === "s_broccoli");
+                const tamagoSub = combinedSubs.find(r => r.id === "s_tamago");
+                const slawSub = combinedSubs.find(r => r.id === "s_slaw");
+                const fukujinSub = combinedSubs.find(r => r.id === "s_fukujin");
+
+                activeWeek.forEach((date, index) => {
+                    const dateStr = formatDate(date);
+                    let targetMain, targetSub1, targetSub2;
+
+                    if (index === 3) {
+                        targetMain = karaageRecipe; targetSub1 = broccoliSub; targetSub2 = tamagoSub;
+                    } else if (index === 4) {
+                        targetMain = curryRecipe; targetSub1 = slawSub; targetSub2 = fukujinSub;
+                    } else {
+                        targetMain = shuffledMains[index % shuffledMains.length];
+                        targetSub1 = shuffledSubs1[index % shuffledSubs1.length];
+                        targetSub2 = shuffledSubs2[(index + 1) % shuffledSubs2.length];
+                    }
+
+                    if (targetMain && targetSub1 && targetSub2) {
+                        const newIngredients = [
+                            ...targetMain.ingredients.map(ing => ({...ing, _source: 'main'})),
+                            ...targetSub1.ingredients.map(ing => ({...ing, _source: 'sub1'})),
+                            ...targetSub2.ingredients.map(ing => ({...ing, _source: 'sub2'}))
+                        ];
+                        updated[dateStr] = {
+                            main: targetMain.name,
+                            mainId: targetMain.id,
+                            sub1: targetSub1.name,
+                            sub1Id: targetSub1.id,
+                            sub2: targetSub2.name,
+                            sub2Id: targetSub2.id,
+                            ingredients: newIngredients
+                        };
+                    }
+                });
+                saveState('obento_calendar_data', updated, setAppData);
+            };
+
+            const clearAllData = () => {
+                if (confirm("カレンダーの全データを初期化するよ。本当に大丈夫？")) {
+                    saveState('obento_calendar_data', {}, setAppData);
+                    setCheckedItems({});
+                }
+            };
+
+            // マイレシピ保存（食材データが欠損しないようにセットするよ）
+            const saveNewRecipe = () => {
+                if (!newRecipe.name) return alert('レシピ名を入力してね！');
+                const recipeId = `my_${Date.now()}`;
+                const recipeData = {
+                    id: recipeId,
+                    name: `⭐ ${newRecipe.name}`,
+                    season: 'all',
+                    ingredients: newRecipe.ingredients.filter(ing => ing.name).map(ing => ({
+                        name: ing.name,
+                        qty: parseFloat(ing.qty) || 0,
+                        unit: ing.unit || "g",
+                        category: ing.category || "other"
+                    }))
+                };
+                const updatedRecipes = {
+                    mains: Array.isArray(myRecipes.mains) ? [...myRecipes.mains] : [],
+                    subs: Array.isArray(myRecipes.subs) ? [...myRecipes.subs] : []
+                };
+                if (newRecipe.type === 'main') updatedRecipes.mains.push(recipeData);
+                else updatedRecipes.subs.push(recipeData);
+                
+                saveState('obento_my_recipes', updatedRecipes, setMyRecipes);
+                setNewRecipe({ type: 'main', name: '', ingredients: [] });
+                alert('マイレシピを登録したよ！');
+                setIsSettingsOpen(false);
+            };
+
+            const deleteMyRecipe = (type, id) => {
+                if(!confirm("削除しますか？")) return;
+                const updated = {
+                    mains: Array.isArray(myRecipes.mains) ? [...myRecipes.mains] : [],
+                    subs: Array.isArray(myRecipes.subs) ? [...myRecipes.subs] : []
+                };
+                if (type === 'main') updated.mains = updated.mains.filter(r => r.id !== id);
+                else updated.subs = updated.subs.filter(r => r.id !== id);
+                saveState('obento_my_recipes', updated, setMyRecipes);
+            };
+
+            // 買い物リスト＆在庫差し引き計算
+            const aggregateShoppingList = () => {
+                const weeks = getWeeksOfMonth(currentYear, currentMonth);
+                const activeWeek = weeks[currentWeekIndex];
+                const summary = {};
+                if (!activeWeek) return [];
+                activeWeek.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const dayData = appData[dateStr];
+                    if (dayData && dayData.ingredients) {
+                        dayData.ingredients.forEach(ing => {
+                            if (!ing.name) return;
+                            const key = `${ing.name}__${ing.unit}__${ing.category || 'other'}`;
+                            const requiredQty = (parseFloat(ing.qty) || 0) * servings;
+    
+                            if (!summary[key]) {
+                                summary[key] = { key, name: ing.name, required: 0, unit: ing.unit, category: ing.category || 'other' };
+                            }
+                            summary[key].required += requiredQty;
+                        });
+                    }
+                });
+                return Object.values(summary);
+            };
+
+            const shoppingList = aggregateShoppingList();
+            const groupedShoppingList = { vegetable: [], meat: [], frozen: [], other: [] };
+            shoppingList.forEach(item => {
+                if (groupedShoppingList[item.category]) groupedShoppingList[item.category].push(item);
+                else groupedShoppingList.other.push(item);
+            });
+            const totalShoppingCount = shoppingList.length;
+
+            const weeks = getWeeksOfMonth(currentYear, currentMonth);
+            const activeWeek = weeks[currentWeekIndex] || [];
+            const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
+            const todayStr = formatDate(today);
+
+            const groupedMains = getGroupedPool(combinedMains);
+            const groupedSubs = getGroupedPool(combinedSubs);
+
+            return (
+                <div className="max-w-md mx-auto px-4 py-6 space-y-5 relative">
+                    
+                    <header className="flex justify-between items-center text-center">
+                        <div>
+                            <h1 className="text-2xl font-bold text-amber-700">🍱 AIお弁当カレンダー</h1>
+                            <p className="text-[10px] text-gray-500 mt-0.5">ラベル復活 ＋ 縦並びで見やすく改善✨</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full shadow-sm text-xs font-bold"
+                        >
+                            ⚙️ レシピ登録
+                        </button>
+                    </header>
+
+                    {/* モーダル：マイレシピ登録 */}
+                    {isSettingsOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl p-5 w-full max-w-sm max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center border-b pb-2 mb-4">
+                                    <h2 className="text-lg font-bold text-amber-900">📝 マイレシピ登録</h2>
+                                    <button onClick={() => setIsSettingsOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
+                                </div>
+                                
+                                <div className="bg-amber-50 p-3 rounded-lg space-y-3">
+                                    <div className="flex space-x-2">
+                                        <select 
+                                            value={newRecipe.type} 
+                                            onChange={e => setNewRecipe({...newRecipe, type: e.target.value})}
+                                            className="text-xs p-1.5 border border-amber-200 rounded"
+                                        >
+                                            <option value="main">主菜</option>
+                                            <option value="sub">副菜</option>
+                                        </select>
+                                        <input 
+                                            type="text" 
+                                            placeholder="レシピ名 (例: ママの卵焼き)" 
+                                            value={newRecipe.name}
+                                            onChange={e => setNewRecipe({...newRecipe, name: e.target.value})}
+                                            className="flex-1 text-xs p-1.5 border border-amber-200 rounded outline-none focus:border-amber-500"
+                                        />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gray-600">食材 (1人前)</label>
+                                        {newRecipe.ingredients.map((ing, idx) => (
+                                            <div key={idx} className="flex space-x-1 text-xs">
+                                                <input type="text" placeholder="食材名" value={ing.name} onChange={e => {
+                                                    const newIng = [...newRecipe.ingredients];
+                                                    newIng[idx].name = e.target.value;
+                                                    setNewRecipe({...newRecipe, ingredients: newIng});
+                                                }} className="flex-1 w-1/3 p-1 border rounded" />
+                                                <input type="number" step="0.1" placeholder="量" value={ing.qty} onChange={e => {
+                                                    const newIng = [...newRecipe.ingredients];
+                                                    newIng[idx].qty = parseFloat(e.target.value) || '';
+                                                    setNewRecipe({...newRecipe, ingredients: newIng});
+                                                }} className="w-12 p-1 border rounded" />
+                                                <select value={ing.unit} onChange={e => {
+                                                    const newIng = [...newRecipe.ingredients];
+                                                    newIng[idx].unit = e.target.value;
+                                                    setNewRecipe({...newRecipe, ingredients: newIng});
+                                                }} className="w-12 p-1 border rounded text-[10px]">
+                                                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                                <select value={ing.category} onChange={e => {
+                                                    const newIng = [...newRecipe.ingredients];
+                                                    newIng[idx].category = e.target.value;
+                                                    setNewRecipe({...newRecipe, ingredients: newIng});
+                                                }} className="w-14 p-1 border rounded text-[10px]">
+                                                    {Object.keys(CATEGORIES).map(k => <option key={k} value={k}>{CATEGORIES[k].label.split(' ')[0]}</option>)}
+                                                </select>
+                                                <button onClick={() => {
+                                                    const newIng = [...newRecipe.ingredients];
+                                                    newIng.splice(idx, 1);
+                                                    setNewRecipe({...newRecipe, ingredients: newIng});
+                                                }} className="text-red-400 font-bold px-1">✕</button>
+                                            </div>
+                                        ))}
+                                        <button 
+                                            onClick={() => setNewRecipe({...newRecipe, ingredients: [...newRecipe.ingredients, {name: '', qty: 1, unit: 'g', category: 'other'}]})}
+                                            className="text-[10px] text-amber-600 font-bold"
+                                        >+ 食材追加</button>
+                                    </div>
+                                    <button onClick={saveNewRecipe} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg text-sm transition">💾 保存する</button>
+                                </div>
+                                
+                                <div className="mt-4 border-t pt-2 space-y-2">
+                                    <h3 className="text-xs font-bold text-amber-900">登録済みマイレシピ</h3>
+                                    <div className="max-h-32 overflow-y-auto text-[10px] space-y-1 pr-1">
+                                        {(myRecipes.mains || []).map(r => <div key={r.id} className="flex justify-between items-center bg-gray-50 border border-gray-100 p-1.5 rounded"><span>[主菜] {r.name}</span><button onClick={() => deleteMyRecipe('main', r.id)} className="text-red-500 font-bold">削除</button></div>)}
+                                        {(myRecipes.subs || []).map(r => <div key={r.id} className="flex justify-between items-center bg-gray-50 border border-gray-100 p-1.5 rounded"><span>[副菜] {r.name}</span><button onClick={() => deleteMyRecipe('sub', r.id)} className="text-red-500 font-bold">削除</button></div>)}
+                                        {(!myRecipes.mains || myRecipes.mains.length === 0) && (!myRecipes.subs || myRecipes.subs.length === 0) && <p className="text-gray-400">まだ登録されていません。</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <section className="bg-white rounded-2xl p-4 shadow-sm border border-amber-100">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-amber-900 flex items-center gap-1">
+                                <span>⚙️ 1. 設定</span>
+                            </h3>
+                            <div className="flex items-center space-x-2">
+                                <label className="text-xs text-gray-500 font-semibold">対象人数:</label>
+                                <select 
+                                    value={servings} 
+                                    onChange={handleServingsChange}
+                                    className="bg-amber-100 text-amber-900 border-none rounded-lg text-sm font-black px-3 py-1.5 focus:ring-2 focus:ring-amber-400 outline-none shadow-inner"
+                                >
+                                    {[...Array(40)].map((_, i) => <option key={i+1} value={i+1}>{i+1}人分</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div className="flex overflow-x-auto space-x-2 pb-1 scrollbar-none snap-x">
+                        {Array.from({ length: 12 }, (_, m) => (
+                            <button key={m} onClick={() => { setCurrentMonth(m); setCurrentWeekIndex(0); }}
+                                className={`snap-center shrink-0 px-5 py-2 rounded-xl text-sm font-bold transition shadow-sm ${
+                                    m === currentMonth ? "bg-amber-500 text-white font-black" : "bg-white text-gray-600 hover:bg-amber-100"
+                                }`}>
+                                {m + 1}月
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="bg-white rounded-xl p-1.5 shadow-sm flex justify-between overflow-x-auto gap-1">
+                        {weeks.map((week, idx) => (
+                            <button key={idx} onClick={() => setCurrentWeekIndex(idx)}
+                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition min-w-[70px] ${
+                                    idx === currentWeekIndex ? "bg-amber-600 text-white shadow-sm" : "text-gray-500 hover:bg-amber-50"
+                                }`}>
+                                {week[0].getMonth() + 1}/{week[0].getDate()}週
+                            </button>
+                        ))}
+                    </div>
+
+                    <section className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-md text-white">
+                        <div className="flex items-center space-x-2 mb-2">
+                            <span className="text-xl">👩‍🍳</span>
+                            <h3 className="font-bold text-sm">2. 1週間分の献立を自動提案</h3>
+                        </div>
+                        <p className="text-xs text-amber-50 mb-3 leading-relaxed">
+                            木曜「唐揚げ」、金曜「カレー」に固定し、他は主菜・副菜をランダムに組み合わせて自動セット！
+                        </p>
+                        <button 
+                            onClick={suggestWeeklyBalance}
+                            className="w-full bg-yellow-300 hover:bg-yellow-200 text-amber-950 text-xs font-black py-3 px-3 rounded-xl transition shadow-md tracking-wider flex items-center justify-center gap-1.5"
+                        >
+                            🥗 今週の献立をシャッフル作成！
+                        </button>
+                    </section>
+
+                    <section className="space-y-3">
+                        <div className="flex justify-between items-center px-1">
+                            <h2 className="text-base font-black text-amber-950">
+                                {currentMonth + 1}月 | {activeWeek[0] ? `${activeWeek[0].getMonth() + 1}/${activeWeek[0].getDate()}週` : ''} の献立
+                            </h2>
+                            <button onClick={clearAllData} className="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded-lg font-bold">全リセット</button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {activeWeek.map((date) => {
+                                const dateStr = formatDate(date);
+                                const isToday = (dateStr === todayStr);
+                                const dayOfWeekNum = date.getDay();
+                                const dayData = appData[dateStr] || { main: "", sub1: "", sub2: "", ingredients: [] };
+
+                                // 過去データ互換性用
+                                const currentMainId = dayData.mainId || combinedMains.find(m => m.name === dayData.main)?.id || "";
+                                const currentSub1Id = dayData.sub1Id || combinedSubs.find(s => s.name === dayData.sub1)?.id || "";
+                                const currentSub2Id = dayData.sub2Id || combinedSubs.find(s => s.name === dayData.sub2)?.id || "";
+                                
+                                return (
+                                    <div key={dateStr} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isToday ? 'border-amber-600 bg-amber-100/20 ring-2 ring-amber-500/20' : 'border-amber-400'} space-y-3 relative`}>
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-1">
+                                            <span className={`px-2 py-0.5 rounded-md text-[11px] shrink-0 font-bold ${isToday ? 'bg-amber-600 text-white font-black' : 'bg-amber-100 text-amber-700'}`}>
+                                                {date.getMonth() + 1}/{date.getDate()}({weekDays[dayOfWeekNum]}) {isToday ? '🌟今日' : ''}
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-bold text-amber-800 w-12 shrink-0">🍳 主菜</span>
+                                                <select 
+                                                    value={currentMainId}
+                                                    onChange={(e) => applyDishToField(dateStr, 'main', e.target.value)} 
+                                                    className="flex-1 w-full text-[12px] bg-amber-50 border border-amber-200 rounded-lg p-1.5 focus:ring-2 focus:ring-amber-400 outline-none font-bold text-gray-700"
+                                                >
+                                                    <option value="">▼ 選択してください</option>
+                                                    {Object.keys(groupedMains).map(key => {
+                                                        if (groupedMains[key].items.length === 0) return null; // 空のグループは表示しない
+                                                        return (
+                                                            <optgroup key={key} label={groupedMains[key].label}>
+                                                                {groupedMains[key].items.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                                            </optgroup>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-bold text-amber-800 w-12 shrink-0">🥗 副菜1</span>
+                                                <select 
+                                                    value={currentSub1Id}
+                                                    onChange={(e) => applyDishToField(dateStr, 'sub1', e.target.value)} 
+                                                    className="flex-1 w-full text-[12px] bg-amber-50 border border-amber-200 rounded-lg p-1.5 focus:ring-2 focus:ring-amber-400 outline-none text-gray-700"
+                                                >
+                                                    <option value="">▼ 選択してください</option>
+                                                    {Object.keys(groupedSubs).map(key => {
+                                                        if (groupedSubs[key].items.length === 0) return null; // 空のグループは表示しない
+                                                        return (
+                                                            <optgroup key={key} label={groupedSubs[key].label}>
+                                                                {groupedSubs[key].items.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                            </optgroup>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-bold text-amber-800 w-12 shrink-0">🥗 副菜2</span>
+                                                <select 
+                                                    value={currentSub2Id}
+                                                    onChange={(e) => applyDishToField(dateStr, 'sub2', e.target.value)} 
+                                                    className="flex-1 w-full text-[12px] bg-amber-50 border border-amber-200 rounded-lg p-1.5 focus:ring-2 focus:ring-amber-400 outline-none text-gray-700"
+                                                >
+                                                    <option value="">▼ 選択してください</option>
+                                                    {Object.keys(groupedSubs).map(key => {
+                                                        if (groupedSubs[key].items.length === 0) return null; // 空のグループは表示しない
+                                                        return (
+                                                            <optgroup key={key} label={groupedSubs[key].label}>
+                                                                {groupedSubs[key].items.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                            </optgroup>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* 食材リスト */}
+                                        <div className="space-y-2 pl-0.5 pt-2 border-t border-dashed border-amber-100 mt-2">
+                                            {dayData.ingredients && dayData.ingredients.map((ing, ingIndex) => {
+                                                const calcTotal = ((parseFloat(ing.qty) || 0) * servings).toFixed(1).replace(/\.0$/, '');
+                                                return (
+                                                    <div key={ingIndex} className="flex items-center space-x-1 text-[11px] w-full">
+                                                        <input type="text" value={ing.name} onChange={(e) => updateIngredient(dateStr, ingIndex, 'name', e.target.value)} className="flex-1 min-w-[70px] bg-gray-50/80 rounded-lg px-2 py-1.5 border border-gray-100/50 outline-none focus:border-amber-400" placeholder="食材名" />
+                                                        <div className="flex items-center bg-gray-100 rounded-lg border border-gray-100 focus-within:border-amber-400 transition-colors shrink-0">
+                                                            <input type="number" step="0.1" value={ing.qty} onChange={(e) => updateIngredient(dateStr, ingIndex, 'qty', e.target.value)} className="w-10 bg-transparent text-center font-mono focus:outline-none text-[11px] py-1.5" placeholder="量" />
+                                                        </div>
+                                                        <select value={ing.unit} onChange={(e) => updateIngredient(dateStr, ingIndex, 'unit', e.target.value)} className="w-12 bg-gray-50/80 rounded-lg py-1.5 px-0.5 text-center border border-gray-100/50 outline-none focus:border-amber-400 text-[10px] shrink-0 font-medium">
+                                                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                                        </select>
+                                                        <select value={ing.category || 'other'} onChange={(e) => updateIngredient(dateStr, ingIndex, 'category', e.target.value)} className="w-12 bg-gray-50/80 rounded-lg py-1.5 px-0.5 text-center border border-gray-100/50 outline-none focus:border-amber-400 text-[9px] shrink-0 font-medium">
+                                                            {Object.keys(CATEGORIES).map(k => <option key={k} value={k}>{CATEGORIES[k].label.split(" ")[0]}</option>)}
+                                                        </select>
+                                                        <div className="w-20 text-center bg-amber-100 text-amber-900 font-extrabold font-mono py-1.5 rounded-lg text-[10px] shadow-sm shrink-0 truncate">
+                                                            計: {calcTotal}
+                                                        </div>
+                                                        <button onClick={() => deleteIngredient(dateStr, ingIndex)} className="w-6 text-red-400 hover:text-red-600 font-bold text-sm shrink-0 text-center">✕</button>
+                                                    </div>
+                                                );
+                                            })}
+                                            <button onClick={() => addIngredient(dateStr)} className="text-[11px] text-amber-600 hover:text-amber-800 font-bold mt-1.5 flex items-center gap-0.5">
+                                                ＋ 食材を追加
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    {/* 買い物リスト (在庫引き算機能付き) */}
+                    <section className="fixed bottom-4 left-4 right-4 max-w-md mx-auto bg-white rounded-2xl p-4 shadow-2xl border border-amber-100 z-40">
+                        <button onClick={() => setIsShoppingListOpen(!isShoppingListOpen)} className="w-full flex items-center justify-between outline-none">
+                            <div className="flex items-center space-x-2">
+                                <span className="text-sm font-extrabold text-amber-900">🛒 買い物リスト＆在庫管理</span>
+                                <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full">{totalShoppingCount}品</span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${isShoppingListOpen ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-gray-400 bg-gray-50 border-gray-100'}`}>
+                                {isShoppingListOpen ? '閉じる ▲' : 'タップして表示 ▼'}
+                            </span>
+                        </button>
+
+                        {isShoppingListOpen && (
+                            <div className="space-y-4 max-h-72 overflow-y-auto mt-4 border-t border-gray-100 pt-3 scrollbar-none text-xs">
+                                {totalShoppingCount === 0 ? (
+                                    <p className="text-xs text-gray-400 text-center py-6">メニューを自動提案するか、食材を登録してね！</p>
+                                ) : (
+                                    Object.keys(CATEGORIES).map(catKey => {
+                                        const items = groupedShoppingList[catKey];
+                                        if (items.length === 0) return null;
+
+                                        return (
+                                            <div key={catKey} className="space-y-2">
+                                                <div className={`text-[10px] font-black px-2 py-1 rounded-lg border tracking-wider ${CATEGORIES[catKey].color}`}>
+                                                    {CATEGORIES[catKey].label}
+                                                </div>
+                                                {items.map((item, itemIdx) => {
+                                                    const stock = stockItems[item.key] || 0;
+                                                    const buyQty = Math.max(0, item.required - stock);
+                                                    const isBought = checkedItems[item.key] || buyQty === 0;
+
+                                                    return (
+                                                        <div key={itemIdx} className="flex items-center justify-between p-2 rounded-xl bg-amber-50/40 border border-amber-100/50">
+                                                            <div className="flex items-center space-x-2">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={!!checkedItems[item.key]}
+                                                                    onChange={(e) => setCheckedItems({...checkedItems, [item.key]: e.target.checked})}
+                                                                    className="w-4 h-4 rounded text-amber-600 border-gray-300 focus:ring-0 focus:ring-offset-0"
+                                                                />
+                                                                <span className={`text-xs font-semibold ${isBought ? 'line-through text-gray-400 font-normal' : 'text-gray-700'}`}>
+                                                                    {item.name}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                {/* 家にある在庫を入力 */}
+                                                                <div className="flex items-center space-x-1 text-[10px] text-gray-500">
+                                                                    <span>必要: {item.required.toFixed(1).replace(/\.0$/, '')}</span>
+                                                                    <span>- 家に:</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        min="0"
+                                                                        step="0.1"
+                                                                        value={stockItems[item.key] || ''} 
+                                                                        placeholder="0"
+                                                                        onChange={(e) => {
+                                                                            const val = parseFloat(e.target.value) || 0;
+                                                                            const newStock = {...stockItems, [item.key]: val};
+                                                                            setStockItems(newStock);
+                                                                            localStorage.setItem('obento_stock_items', JSON.stringify(newStock));
+                                                                        }}
+                                                                        className="w-10 px-1 py-0.5 text-center border border-amber-200 rounded bg-white text-gray-700 outline-none focus:border-amber-400"
+                                                                    />
+                                                                </div>
+                                                                {/* 実際に買う量 */}
+                                                                <div className="text-right">
+                                                                    <span className="text-[10px] text-gray-500 mr-1">買う量:</span>
+                                                                    <span className={`font-mono font-black text-sm ${buyQty > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                                        {buyQty.toFixed(1).replace(/\.0$/, '')} <span className="text-[9px] font-normal">{item.unit}</span>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
